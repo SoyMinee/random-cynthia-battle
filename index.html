@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desafío Cynthia · Simulador GBA</title>
+<style>
+/* ===== PLACEHOLDERS GRÁFICOS: sustituye estos estilos por tus PNG/sprites de UI ===== */
+:root{--ink:#222;--p:#f8f8f0;--p2:#d8d0b8;--ac:#506ea0}
+*{box-sizing:border-box}
+html{height:100%;background:#111}
+body{margin:0;width:100%;height:100%;background:#111;display:grid;place-items:center;overflow:hidden;font:8px/1.35 monospace;color:var(--ink);user-select:none}
+#gba{width:240px;height:160px;position:relative;overflow:hidden;background:#222;transform-origin:center}
+img{image-rendering:pixelated}
+#scene{position:absolute;inset:0 0 48px 0;background:linear-gradient(#8cc8f0 0 55%,#8fc070 55%)} /* PLACEHOLDER fondo de batalla */
+#foe{position:absolute;right:20px;top:6px;width:64px;height:64px;transition:opacity .4s}
+#me{position:absolute;left:14px;bottom:-4px;width:80px;height:80px;transition:opacity .4s}
+.box{position:absolute;background:var(--p);border:2px solid var(--ink);border-radius:4px;padding:2px 4px} /* PLACEHOLDER caja de texto */
+#foeBox{left:6px;top:8px;width:100px;visibility:hidden}
+#meBox{right:6px;bottom:56px;width:106px;visibility:hidden}
+.hp{height:5px;background:#555;border:1px solid var(--ink);margin-top:2px}
+.hp u{display:block;height:100%;width:100%;background:#4c4;transition:width .6s,background .6s}
+#tbox{position:absolute;left:0;right:0;bottom:0;height:48px;background:var(--p);border:2px solid var(--ink);padding:4px 6px;font-size:9px}
+.btn{background:var(--p2);border:2px solid var(--ink);border-radius:3px;padding:1px 3px;cursor:pointer;box-shadow:0 2px 0 var(--ink);text-align:center;font:inherit;color:inherit} /* PLACEHOLDER botón normal */
+.btn:active{transform:translateY(2px);box-shadow:none;background:#b8b098} /* PLACEHOLDER botón pulsado */
+.btn[disabled]{opacity:.45;cursor:default}
+.g{display:grid;gap:3px}
+.ov{position:absolute;inset:0;background:var(--ac);display:none;padding:4px;color:var(--ink)}
+.slot{cursor:pointer;display:flex;gap:3px;align-items:center}
+.slot img{width:22px;height:22px}
+.slot>div{flex:1;min-width:0}
+
+/* ===== SKIN PLATINO (assets/): sustituye/edita estas rutas para cambiar el aspecto ===== */
+@font-face{font-family:DS;src:url(assets/font.ttf) format('truetype')} /* opcional: pon tu TTF en assets/font.ttf */
+body{font-family:DS,monospace}
+img,.box,.btn,#tbox,#scene,.ov,.hp,.slot{image-rendering:pixelated}
+#scene{inset:0 0 52px 0;background:url(assets/bg_cynthia.png) center top/cover}
+#plE,#plP{position:absolute}
+#plE{right:1px;top:50px;width:126px}
+#plP{left:2px;bottom:0;width:220px}
+#foe{right:32px;top:2px;z-index:1}
+#me{left:34px;bottom:10px;z-index:1}
+#tbox{height:52px;border:4px solid transparent;border-image:url(assets/textbox.png) 4 fill/4px stretch;background:none;padding:0}
+.hud{position:absolute;border:0;border-radius:0;padding:0;background-color:transparent;background-repeat:no-repeat;background-size:100% 100%;z-index:2}
+#foeBox{background-image:url(assets/hud_enemy.png);left:6px;top:8px;width:122px;height:34px}
+#meBox{background-image:url(assets/hud_player.png);right:0;bottom:6px;width:128px;height:42px}
+.hud b{position:absolute;font-size:8px}
+#fn{left:8px;top:3px}#fl{position:absolute;left:84px;top:6px;font-size:8px}
+#mn{left:22px;top:7px}#ml{position:absolute;left:105px;top:7px;font-size:8px}
+#foeBox .hp{position:absolute;left:50px;top:22px;width:48px;height:4px;margin:0;border:0;background:none}
+#meBox .hp{position:absolute;left:72px;top:23px;width:48px;height:4px;margin:0;border:0;background:none}
+#mh,#mm{position:absolute;top:28px;font-size:8px}
+#mh{left:58px;width:30px;text-align:right}#mm{left:98px}
+.btn{border:0;border-radius:0;box-shadow:none;background:url(assets/btn_normal.png) 0 0/100% 100% no-repeat;padding:0 2px}
+.btn:hover{background-image:url(assets/btn_hi.png)}
+.btn:active{transform:none;background-image:url(assets/btn_press.png)}
+.btn[disabled]{background-image:url(assets/btn_dis.png);opacity:1}
+.ov{background:#9a82e0}
+.slot{border:0;border-radius:0;background:url(assets/slot_R.png) 0 0/100% 100% no-repeat}
+.slot:first-child{background-image:url(assets/slot_big.png)}
+.slot:hover{filter:brightness(1.12)}
+#pc{background-image:url(assets/cancel_normal.png)}#pc:hover{background-image:url(assets/cancel_hi.png)}
+
+/* --- ajustes v3 --- */
+:root{--fs:8px} /* tamaño base de la fuente: súbelo/bájalo si tu TTF se ve pequeño o grande */
+body{font-size:var(--fs)}
+b{font-weight:normal}
+.ov{z-index:10}
+#me{bottom:6px}
+.slot{padding:1px 4px 1px 12px;font-size:7px;line-height:1.1;overflow:hidden}
+.slot img{width:20px;height:20px}
+.slot .hp{display:inline-block;width:46px;height:4px;margin:0 3px 0 0;vertical-align:middle;background:#555;border:1px solid #222}
+.slot:first-child{padding:4px;font-size:8px}
+.slot:first-child .hp{display:block;width:64px;margin:2px auto}
+#pc{color:#fff}
+
+/* --- ajustes v4 --- */
+#me{bottom:0;left:30px}
+#fn{left:10px;top:4px}#fl{top:8px}
+#mn{left:24px;top:6px}#ml{top:9px}
+.hit{animation:blink .15s steps(1) 5;transition:none!important}
+@keyframes blink{0%{opacity:1}50%{opacity:0}}
+.st{position:absolute;display:none;font:normal 6px/7px monospace;padding:0 2px;border:1px solid #222;border-radius:2px;color:#fff;z-index:3}
+#fst{left:10px;top:19px}#mst{left:34px;top:19px}
+.st.psn,.st.tox{background:#a040a0}.st.par{background:#d8a800}.st.slp{background:#789}.st.brn{background:#e04820}.st.frz{background:#58b8e8}
+</style></head><body>
+<div id="gba">
+ <div id="scene"><img id="plE" src="assets/plat_enemy.png" alt=""><img id="plP" src="assets/plat_player.png" alt=""><img id="foe" alt="" src="assets/cynthia.png"><img id="me" alt="" src="assets/me.png">
+  <div class="box hud" id="foeBox"><b id="fn"></b> <span id="fl"></span><div class="hp"><u id="fb"></u></div><i class="st" id="fst"></i></div>
+  <div class="box hud" id="meBox"><b id="mn"></b> <span id="ml"></span><div class="hp"><u id="mb"></u></div><div id="mh"></div><div id="mm"></div><i class="st" id="mst"></i></div>
+ </div>
+ <div id="tbox"></div>
+ <div class="ov" id="party"></div>
+ <div class="ov" id="start" style="display:block"></div>
+</div>
+<script type="module">
+const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms)),rnd=n=>Math.floor(Math.random()*n),
+shuf=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(p=>p[1]);
+const fit=()=>$('#gba').style.transform=`scale(${Math.min(innerWidth/240,innerHeight/160)})`;fit();addEventListener('resize',fit);
+const S=$('#start'),T=$('#tbox'),P=$('#party');
+const msg0=t=>S.innerHTML=`<div class="box" style="left:14px;right:14px;top:56px;text-align:center">${t}</div>`;
+msg0('Cargando motor de Pokémon Showdown…');
+
+/* ---------- Motor de Showdown (@pkmn/sim) ---------- */
+let sim;for(const u of ['https://esm.sh/@pkmn/sim','https://cdn.jsdelivr.net/npm/@pkmn/sim/+esm']){try{sim=await import(u);break}catch(e){console.warn(u,e)}}
+if(!sim)throw msg0('No se pudo cargar el motor (@pkmn/sim). Revisa tu conexión.');
+const {Dex,Teams}=sim,BS=sim.BattleStreams??sim;
+Dex.includeFormats?.(); // necesario: sin esto el formato gen4customgame no existe y la batalla no arranca
+const D4=Dex.mod('gen4');
+
+/* ---------- PokeAPI ---------- */
+const cache={},SP={};
+/* ===== AUDIO: PLACEHOLDERS — pon aquí los nombres de tus archivos (carpeta assets/audio/). Deja '' para desactivar ===== */
+const AUDIO={
+ bgm:'assets/audio/bgm.mp3',            // música de fondo (en bucle)
+ hit:'assets/audio/hit.wav',            // golpe normal
+ hitWeak:'assets/audio/hit_weak.wav',   // golpe poco eficaz
+ hitSuper:'assets/audio/hit_super.wav', // golpe supereficaz
+ cry:n=>`assets/audio/cries/${n}.ogg`,  // cry por nº de Pokédex: descarga los .ogg de github.com/PokeAPI/cries (cries/pokemon/legacy/ o latest/)
+ vol:{bgm:.35,sfx:.8}
+};
+const play=(src,v=AUDIO.vol.sfx)=>{if(!src||src.includes('undefined'))return;const a=new Audio(src);a.volume=v;a.play().catch(()=>{})};
+const bgm=AUDIO.bgm?Object.assign(new Audio(AUDIO.bgm),{loop:true,volume:AUDIO.vol.bgm}):null;
+const api=id=>cache[id]??=fetch('https://pokeapi.co/api/v2/pokemon/'+id).then(r=>r.json());
+const spr=(p,b)=>{const g=p.sprites.versions?.['generation-iv']?.platinum;return b?(g?.back_default||p.sprites.back_default):(g?.front_default||p.sprites.front_default)};
+const GROUPS=['diamond-pearl','platinum','heartgold-soulsilver'];
+function learn(p,lv){const s=new Set();for(const m of p.moves)for(const d of m.version_group_details)
+ if(GROUPS.includes(d.version_group.name)&&(d.move_learn_method.name!='level-up'||d.level_learned_at<=lv)){const mv=D4.moves.get(m.move.name.replace(/-/g,''));if(mv.exists&&mv.id!='struggle')s.add(mv.id)}return[...s]}
+function pick(ids){const dmg=shuf(ids.filter(i=>D4.moves.get(i).category!='Status')).slice(0,3);
+ return[...dmg,...shuf(ids.filter(i=>!dmg.includes(i)))].slice(0,4).map(i=>D4.moves.get(i).name)}
+
+/* ---------- Equipos ---------- */
+// Cynthia (Platino): 58,58,60,60,58,62 -> media 59,33. Jugador: mismos niveles totales, cada uno entre 57 y 61 (±2 de la media).
+const CYN=[['Spiritomb',58,['Silver Wind','Dark Pulse','Psychic','Shadow Ball']],['Roserade',58,['Toxic','Sludge Bomb','Giga Drain','Extrasensory']],
+['Togekiss',60,['Aura Sphere','Air Slash','Roost','Extrasensory']],['Lucario',60,['Aura Sphere','Dragon Pulse','Psychic','Extreme Speed']],
+['Milotic',58,['Surf','Mirror Coat','Ice Beam','Dragon Pulse']],['Garchomp',62,['Dragon Rush','Earthquake','Brick Break','Giga Impact']]];
+const CYN_AVG=CYN.reduce((a,c)=>a+c[1],0)/6;
+function levels(){const t=Math.round(CYN_AVG*6),b=Math.floor(t/6),l=Array(6).fill(b);for(let i=0;i<t-b*6;i++)l[i]++;
+ const lo=Math.round(CYN_AVG)-2,hi=Math.round(CYN_AVG)+2;
+ for(let i=0;i<80;i++){const x=rnd(6),y=rnd(6);if(x!=y&&l[x]<hi&&l[y]>lo){l[x]++;l[y]--}}return shuf(l)}
+const mk=(sp,l,m,fx,r)=>({name:sp.name,species:sp.name,item:r?.item||'',ability:fx?sp.abilities[0]:[sp.abilities[0],sp.abilities[1]].filter(Boolean)[rnd(sp.abilities[1]?2:1)],
+ moves:m,nature:r?.nature||'Serious',evs:r?.evs||{hp:85,atk:85,def:85,spa:85,spd:85,spe:85},level:l,gender:''});
+const pool=D4.species.all().filter(s=>s.num>0&&s.num<=493&&!s.forme&&!s.nfe&&![132,201,235].includes(s.num)&&!(s.tags||[]).some(t=>/Legendary|Mythical/.test(t))&&Object.values(s.baseStats).reduce((a,b)=>a+b)>=480&&!Object.values(s.abilities).some(a=>/^(Truant|Slow Start)$/.test(a)));
+const TYPES17=['Normal','Fire','Water','Electric','Grass','Ice','Fighting','Poison','Ground','Flying','Psychic','Bug','Rock','Ghost','Dragon','Dark','Steel'];
+const BAD=new Set(['explosion','selfdestruct','focuspunch','dreameater','lastresort','fakeout','hiddenpower','frustration','spitup','magnitude','present','flail','reversal','psywave','counter','mirrorcoat','metalburst','endeavor','snore','uproar','sleeptalk','wish']);
+const cover=t=>TYPES17.filter(d=>D4.getImmunity(t,d)&&D4.getEffectiveness(t,d)>0);
+// Moveset coherente: ataques de la categoría fuerte del Pokémon, STAB + cobertura de tipos, y un movimiento de apoyo (setup afín o recuperación)
+function moveset(sp,ids){
+ const b=sp.baseStats,ph=b.atk>=b.spa,main=ph?'Physical':'Special',mixed=Math.max(b.atk,b.spa)/Math.min(b.atk,b.spa)<1.15;
+ const M=ids.map(i=>D4.moves.get(i)),have=new Set(ids),first=l=>l.find(x=>have.has(x));
+ const A=M.filter(m=>m.category!='Status'&&(m.basePower||m.id=='return')&&!BAD.has(m.id)&&!m.flags.charge&&!m.flags.recharge&&!m.selfdestruct&&!m.ohko&&m.self?.volatileStatus!='lockedmove'&&(m.accuracy===true||m.accuracy>=70));
+ if(A.length<2)return null;
+ const pw=m=>(m.id=='return'?102:m.basePower)*(m.accuracy===true?1:m.accuracy/100)*(sp.types.includes(m.type)?1.5:1)*(m.category==main?1:mixed?.7:.25);
+ const bulky=b.hp+b.def+b.spd>=270,
+  setup=first(ph?['swordsdance','dragondance','bulkup']:['calmmind','nastyplot']),
+  rec=first(['recover','roost','softboiled','milkdrink','slackoff','synthesis','moonlight','morningsun']),
+  ut=[setup,rec].filter(Boolean).slice(0,bulky?2:1),n=4-ut.length,sel=[],hit=new Set(),rest=[...A];
+ while(sel.length<n&&rest.length){let best,bs=-1;
+  for(const m of rest){let s=pw(m);if(sel.length)s*=1+.25*cover(m.type).filter(d=>!hit.has(d)).length;if(sel.some(x=>x.type==m.type))s*=.5;if(s>bs){bs=s;best=m}}
+  sel.push(best);cover(best.type).forEach(d=>hit.add(d));rest.splice(rest.indexOf(best),1)}
+ return[...sel.map(m=>m.name),...ut.map(i=>D4.moves.get(i).name)]}
+// Naturaleza, EVs (252/252) y objeto acordes al rol ofensivo
+function role(sp){const b=sp.baseStats,ph=b.atk>=b.spa,f=b.spe>=70,o=ph?'atk':'spa';
+ return{nature:ph?(f?'Jolly':'Adamant'):(f?'Timid':'Modest'),item:['Leftovers','Life Orb','Expert Belt'][rnd(3)],
+  evs:{hp:f?6:252,atk:0,def:0,spa:0,spd:f?0:4,spe:f?252:0,[o]:252}}}
+async function playerTeam(){const lv=levels(),out=[];
+ for(const sp of shuf(pool)){if(out.length==6)break;const l=lv[out.length],p=await api(sp.num),ids=learn(p,l);const mv=moveset(sp,ids);if(!mv)continue;
+  SP[sp.name]={f:spr(p),b:spr(p,1),num:sp.num};out.push(mk(sp,l,mv,0,role(sp)))}return out}
+const cynTeam=()=>Promise.all(CYN.map(async([n,l,m])=>{const sp=D4.species.get(n),p=await api(sp.num);SP[sp.name]={f:spr(p),b:spr(p,1),num:sp.num};return mk(sp,l,m,1)}));
+
+/* ---------- Pantalla inicial ---------- */
+let mine,cyn;
+try{[mine,cyn]=await Promise.all([playerTeam(),cynTeam()])}catch(e){console.error(e);throw msg0('No se pudo contactar con PokeAPI.')}
+const avg=mine.reduce((a,t)=>a+t.level,0)/6;
+S.innerHTML=`<div style="font-weight:bold;color:#fff;text-align:center">TU EQUIPO · Nv. medio ${avg.toFixed(2)} (Cynthia ${CYN_AVG.toFixed(2)})</div>
+<div class="g" style="grid-template-columns:1fr 1fr;gap:2px;margin-top:3px">${mine.map(t=>`<div class="box" style="position:static;padding:1px 3px;display:flex;gap:2px"><img src="${SP[t.name].f}" width=22 height=22><div><b>${t.name}</b> Nv${t.level}<br><span style="font-size:6px;line-height:1.1;display:block">${t.moves.join(' · ')}</span></div></div>`).join('')}</div>
+<div class="g" style="grid-template-columns:1fr 1fr;margin-top:5px"><button class="btn" id="re">OTRO EQUIPO</button><button class="btn" id="go">¡COMENZAR!</button></div>`;
+$('#re').onclick=()=>location.reload();$('#go').onclick=battle;
+
+/* ---------- Cola de mensajes ---------- */
+let q=Promise.resolve(),n=0,pend=null,cur=null,ST=null;
+const Q=f=>{n++;q=q.then(f).catch(e=>{console.error(e);let d=$('#dbg');if(!d)$('#gba').insertAdjacentHTML('beforeend','<div id="dbg" style="position:absolute;left:0;top:0;z-index:99;background:#c00;color:#fff;font:6px monospace;padding:1px 3px"></div>'),d=$('#dbg');d.textContent='Error: '+(e&&e.message||e)}).then(()=>{if(!--n)setTimeout(settle,120)})};
+const settle=()=>{if(!n&&pend){const r=pend;pend=null;cur=r;r.forceSwitch?party(true):main()}};
+function say(t,ms=1300){T.innerHTML=`<div>${t}</div>`;return new Promise(r=>{const g=$('#gba'),f=()=>{clearTimeout(tm);g.removeEventListener('click',f);r()},tm=setTimeout(f,ms);setTimeout(()=>g.addEventListener('click',f),150)})}
+
+/* ---------- Combate ---------- */
+function battle(){S.style.display='none';bgm?.play().catch(()=>{});
+ ST=BS.getPlayerStreams(new BS.BattleStream());
+ ST.omniscient.write(`>start ${JSON.stringify({formatid:'gen4customgame'})}\n>player p1 ${JSON.stringify({name:'Jugador',team:Teams.pack(mine)})}\n>player p2 ${JSON.stringify({name:'Cynthia',team:Teams.pack(cyn)})}`);
+ const fail=e=>{console.error(e);Q(()=>say('Error del motor: '+(e?.message||e),99999))};
+ pump(ST.p1,onP1).catch(fail);pump(ST.p2,onP2).catch(fail);
+ pump(ST.omniscient,c=>{if(/\|error\||Error/.test(c)){console.warn('[sim]',c);Q(()=>say('Error: '+c.slice(0,120),99999))}}).catch(fail);
+ setTimeout(()=>{if(!cur&&!n)Q(()=>say('El motor no responde. Abre F12 > Consola y mándame el error.',99999))},10000);
+ Q(()=>say('¡La Campeona CYNTHIA quiere combatir!',1800))}
+async function pump(s,fn){for(let c;(c=await s.read());)fn(c)}
+function onP1(c){for(const l of c.split('\n')){
+ if(l.startsWith('|request|')){const r=JSON.parse(l.slice(9));if(r.teamPreview){ST.p1.write('default');continue}if(!r.wait){pend=r;setTimeout(settle,120)}}
+ else if(l.startsWith('|error|')){Q(()=>say('Acción no válida.',900));pend=cur;setTimeout(settle,50)}
+ else if(l)Q(()=>line(l))}}
+
+const R={me:{img:'#me',n:'#mn',l:'#ml',box:'#meBox',b:'#mb'},foe:{img:'#foe',n:'#fn',l:'#fl',box:'#foeBox',b:'#fb'}};
+const nm=id=>id.split(': ')[1],who=id=>id[1]=='1'?'me':'foe',nice=id=>who(id)=='me'?nm(id):nm(id)+' rival';
+const STS={par:'paralizado',brn:'quemado',psn:'envenenado',tox:'gravemente envenenado',slp:'dormido',frz:'congelado'};
+const STAT={atk:'Ataque',def:'Defensa',spa:'At. Esp.',spd:'Def. Esp.',spe:'Velocidad',accuracy:'Precisión',evasion:'Evasión'};
+function hp(w,s){const[h,m]=s.split(' ')[0].split('/').map(Number),pc=m?h/m*100:0,b=$(R[w].b);
+ b.style.width=pc+'%';b.style.background=pc>50?'#4c4':pc>20?'#ec4':'#e44';if(w=='me'){$('#mh').textContent=h;$('#mm').textContent=m||''}setSt(w,s.split(' ')[1])}
+let eff='n',msgq='';
+const SLAB={tox:'PSN'};
+function setSt(w,st){const e=$(w=='me'?'#mst':'#fst');if(!st||st=='fnt'){e.style.display='none';return}e.textContent=SLAB[st]||st.toUpperCase();e.className='st '+st;e.style.display='block'}
+const blink=sel=>{const e=$(sel);e.classList.remove('hit');void e.offsetWidth;e.classList.add('hit')};
+const CANT={slp:'está profundamente dormido',par:'está paralizado y no se puede mover',frz:'está congelado',flinch:'retrocedió',recharge:'debe recuperarse'};
+async function line(l){const a=l.split('|'),k=a[1],id=a[2];
+ if(k=='switch'||k=='drag'){const w=who(id),r=R[w],[name,lv]=a[3].split(', '),sp=SP[name]||{};
+  $(r.img).src=(w=='me'?sp.b:sp.f)||'';$(r.img).style.opacity=1;$(r.n).textContent=name;$(r.l).textContent=(lv||'L100').replace('L','');
+  $(r.box).style.visibility='visible';hp(w,a[4]);play(AUDIO.cry(sp.num));await say(w=='me'?`¡Adelante, ${name}!`:`Cynthia sacó a ${name}.`)}
+ else if(k=='move'){eff='n';msgq='';await say(`${nice(id)} usó ${a[3]}!`)}
+ else if(k=='-damage'||k=='-heal'){const w=who(id),hitNow=k=='-damage'&&!a[4];
+  if(hitNow){play(eff=='s'?AUDIO.hitSuper:eff=='w'?AUDIO.hitWeak:AUDIO.hit);blink(R[w].img)}
+  hp(w,a[3]);await sleep(hitNow?900:600);if(hitNow&&msgq){const t=msgq;msgq='';eff='n';await say(t)}}
+ else if(k=='faint'){$(R[who(id)].img).style.opacity=0;setSt(who(id),'');play(AUDIO.cry(SP[nm(id)]?.num));await say(`¡${nice(id)} se debilitó!`)}
+ else if(k=='-supereffective'){eff='s';msgq='¡Es muy eficaz!'}
+ else if(k=='-resisted'){eff='w';msgq='No es muy eficaz...'}
+ else if(k=='-crit')await say('¡Golpe crítico!');
+ else if(k=='-miss')await say(`¡El ataque de ${nice(id)} falló!`);
+ else if(k=='-immune')await say(`No afecta a ${nice(id)}...`);
+ else if(k=='-status'){setSt(who(id),a[3]);await say(`¡${nice(id)} está ${STS[a[3]]||a[3]}!`)}
+ else if(k=='-curestatus'){setSt(who(id),'');await say(`¡${nice(id)} se curó de su estado!`)}
+ else if(k=='-boost'||k=='-unboost')await say(`¡${STAT[a[3]]||a[3]} de ${nice(id)} ${k=='-boost'?'subió':'bajó'}${+a[4]>1?' mucho':''}!`);
+ else if(k=='-fail')await say('¡Pero falló!');
+ else if(k=='cant')await say(`¡${nice(id)} ${CANT[a[3]]||'no puede moverse'}!`);
+ else if(k=='win'){await say(a[2]=='Jugador'?'¡Has derrotado a la Campeona Cynthia!':'Cynthia ha ganado el combate...',3000);
+  T.innerHTML+=`<button class="btn" style="position:absolute;right:6px;bottom:4px" onclick="location.reload()">NUEVO COMBATE</button>`}}
+
+/* ---------- IA de Cynthia (elige el movimiento con mejor daño esperado) ---------- */
+let foe1='';
+function onP2(c){for(const l of c.split('\n')){const a=l.split('|');
+ if((a[1]=='switch'||a[1]=='drag')&&a[2].startsWith('p1a'))foe1=a[3].split(',')[0];
+ if(a[1]!='request')continue;const r=JSON.parse(l.slice(9));if(r.wait)continue;
+ if(r.teamPreview){ST.p2.write('default');continue}
+ const ps=r.side.pokemon;
+ if(r.forceSwitch){ST.p2.write('switch '+(ps.findIndex(p=>!p.active&&!p.condition.endsWith('fnt'))+1));continue}
+ const ty=D4.species.get(foe1||'Pikachu').types,me=ps[0],my=D4.species.get(me.details.split(',')[0]).types,[h,m]=me.condition.split(' ')[0].split('/').map(Number);
+ let best=0,bs=-1;
+ r.active[0].moves.forEach((mv,i)=>{if(mv.disabled)return;const d=D4.moves.get(mv.id);let s;
+  if(d.category=='Status')s=mv.id=='recover'&&h/m<.5?300:15;
+  else{const e=ty.reduce((x,t)=>x+(D4.getImmunity(d.type,t)?D4.getEffectiveness(d.type,t):-9),0);
+   s=(d.basePower||60)*(d.accuracy===true?1:d.accuracy/100)*2**e*(my.includes(d.type)?1.5:1)}
+  s*=.9+Math.random()*.2;if(s>bs){bs=s;best=i}});
+ ST.p2.write('move '+(best+1))}}
+
+/* ---------- Menús (placeholders) ---------- */
+const TYPES={Normal:'Normal',Fire:'Fuego',Water:'Agua',Grass:'Planta',Electric:'Eléctrico',Ice:'Hielo',Fighting:'Lucha',Poison:'Veneno',Ground:'Tierra',Flying:'Volador',Psychic:'Psíquico',Bug:'Bicho',Rock:'Roca',Ghost:'Fantasma',Dragon:'Dragón',Dark:'Siniestro',Steel:'Acero'};
+function main(){const name=cur.side.pokemon[0].details.split(',')[0];
+ T.innerHTML=`<div style="position:absolute;left:8px;top:8px;width:100px;font-size:9px">¿Qué hará ${name}?</div>
+ <div class="g" style="position:absolute;right:6px;top:4px;grid-template-columns:56px 56px;width:114px"><button class="btn" id="b1">LUCHAR</button><button class="btn" id="b2">MOCHILA</button><button class="btn" id="b3">POKéMON</button><button class="btn" id="b4">HUIR</button></div>`;
+ $('#b1').onclick=fight;
+ $('#b2').onclick=()=>say('No puedes usar objetos en este combate.',1400).then(main);
+ $('#b3').onclick=()=>cur.active[0].trapped?say('¡No puedes cambiar de Pokémon!',1200).then(main):party(false);
+ $('#b4').onclick=()=>say('¡No puedes huir de un combate contra la Campeona!',1600).then(main)}
+function fight(){const ms=cur.active[0].moves;
+ T.innerHTML=`<div class="g" style="grid-template-columns:1fr 1fr;width:150px;position:absolute;left:5px;top:4px">${ms.map((m,i)=>`<button class="btn mv" data-i="${i}" ${m.disabled||m.pp==0?'disabled':''}>${m.move}</button>`).join('')}</div>
+ <div class="box" id="mi" style="right:5px;top:4px;width:76px;height:24px"></div>
+ <button class="btn" id="bk" style="position:absolute;right:5px;bottom:2px;width:76px;height:14px;padding:0">ATRÁS</button>`;
+ const info=m=>$('#mi').innerHTML=`PP ${m.pp??'-'}/${m.maxpp??'-'}<br>${TYPES[D4.moves.get(m.id).type]||''}`;info(ms[0]);
+ document.querySelectorAll('.mv').forEach(b=>{b.onpointerenter=()=>info(ms[b.dataset.i]);b.onclick=()=>{ST.p1.write('move '+(+b.dataset.i+1));T.innerHTML=''}});
+ $('#bk').onclick=main}
+function party(forced){const t=cur.side.pokemon;P.style.display='block';
+ const pos=i=>i?`left:92px;top:${4+(i-1)*26}px;width:144px;height:24px`:'left:4px;top:4px;width:84px;height:100px';
+ P.innerHTML=t.map((p,i)=>{const[name,lv]=p.details.split(', '),[h,m]=p.condition.split(' ')[0].split('/').map(Number),pc=m?h/m*100:0,sp=SP[name]||{},st=p.condition.split(' ')[1];
+  return`<div class="box slot" data-i="${i}" style="${pos(i)};${pc?'':'opacity:.6'};${i?'':'flex-direction:column;justify-content:center;text-align:center'}"><img src="${sp.f||''}" ${i?'':'style="width:48px;height:48px"'}>
+  <div><b>${name}</b> ${(lv||'').replace('L','Nv')}<div class="hp"><u style="width:${pc}%;background:${pc>50?'#4c4':pc>20?'#ec4':'#e44'}"></u></div>${m?h+'/'+m+(st?' '+st.toUpperCase():''):'Debilitado'}</div></div>`}).join('')
+ +`<button class="btn" id="pc" style="position:absolute;left:4px;top:108px;width:84px;height:22px" ${forced?'disabled':''}>CANCELAR</button><div class="box" id="pm" style="left:4px;right:4px;top:136px;height:20px">Elige un Pokémon.</div>`;
+ const pm=$('#pm');
+ $('#pc').onclick=()=>{P.style.display='none';main()};
+ P.onclick=e=>{const s=e.target.closest('.slot');if(!s)return;const i=+s.dataset.i,p=t[i],name=p.details.split(',')[0];
+  if(p.active)return pm.textContent='¡Ya está en combate!';
+  if(p.condition.endsWith('fnt'))return pm.textContent='¡No le quedan fuerzas!';
+  pm.innerHTML=`${name}: <button class="btn" id="sw">CAMBIAR</button> <button class="btn" id="sc">CANCELAR</button>`;
+  $('#sc').onclick=()=>pm.textContent='Elige un Pokémon.';
+  $('#sw').onclick=()=>{ST.p1.write('switch '+(i+1));P.style.display='none';T.innerHTML=''}}}
+</script></body></html>
